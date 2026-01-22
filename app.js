@@ -65,7 +65,14 @@ function loadGamesList() {
 
 /* ---------- LOAD GAME ---------- */
 function loadGame() {
-  const id = new URLSearchParams(location.search).get("id");
+  const params = new URLSearchParams(location.search);
+
+  if (params.get("shared")) {
+    loadSharedGame(params.get("shared"));
+    return;
+  }
+
+  const id = params.get("id");
   currentGame = getGames().find(g => g.id == id);
   title.innerText = currentGame.name;
   startGame("en");
@@ -140,36 +147,40 @@ function failAnim(el) {
   setTimeout(() => el.style.transform = "", 300);
 }
 
-/* ---------- SHARE ---------- */
+/* ---------- SHARE (AUTO COPY) ---------- */
 function shareGame() {
-  const encoded = btoa(JSON.stringify(currentGame));
+  const data = {
+    name: currentGame.name,
+    pairs: currentGame.pairs
+  };
+
+  const encoded = btoa(JSON.stringify(data));
   const base = location.href.split("?")[0];
   const link = `${base}?shared=${encoded}`;
-  prompt("קישור שיתוף:", link);
+
+  navigator.clipboard.writeText(link).then(() => {
+    alert("🔗 הקישור הועתק ללוח!");
+  });
 }
 
-/* ---------- LOAD FROM SHARE ---------- */
-(function () {
-  const p = new URLSearchParams(location.search);
-  if (p.get("shared")) {
-    const g = JSON.parse(atob(p.get("shared")));
-    const games = getGames();
-    if (!games.find(x => x.id === g.id)) {
-      games.push(g);
-      saveGames(games);
-    }
-    location.href = `game.html?id=${g.id}`;
-  }
-})();
+/* ---------- LOAD SHARED GAME ---------- */
+function loadSharedGame(encoded) {
+  const data = JSON.parse(atob(encoded));
 
-/* ---------- LOAD EDIT ---------- */
-(function () {
-  const editId = new URLSearchParams(location.search).get("edit");
-  if (editId && location.pathname.includes("editor")) {
-    const g = getGames().find(x => x.id == editId);
-    gameName.value = g.name;
-    english.value = g.pairs.map(p => p.en).join("\n");
-    hebrew.value = g.pairs.map(p => p.he).join("\n");
-    document.querySelector("button").onclick = () => saveGame(g.id);
-  }
-})();
+  const newGame = {
+    id: Date.now(),
+    name: data.name + " (משותף)",
+    pairs: data.pairs
+  };
+
+  const games = getGames();
+  games.push(newGame);
+  saveGames(games);
+
+  currentGame = newGame;
+  title.innerText = newGame.name;
+  startGame("en");
+
+  // מנקה את ה-URL
+  history.replaceState({}, "", "game.html?id=" + newGame.id);
+}
